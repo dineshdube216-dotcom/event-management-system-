@@ -1,0 +1,212 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  user_id        String             @id @default(uuid())
+  name           String
+  email          String             @unique
+  password_hash  String
+  role           String             @default("student") // admin, mentor, president, student
+  department     String?
+  adt_no         String?
+  phone_no       String?
+  photo_url      String?
+  email_verified Boolean            @default(false)
+  created_at     DateTime           @default(now())
+
+  // Relations
+  mentored_clubs        Club[]             @relation("ClubMentor")
+  led_clubs             Club[]             @relation("ClubPresident")
+  created_events        Event[]            @relation("EventCreator")
+  approvals             Event_Approval[]   @relation("MentorApprovals")
+  registrations         Registration[]     @relation("StudentRegistrations")
+  otps                  OTP_Verification[] @relation("UserOTPs")
+  notifications         Notification[]     @relation("UserNotifications")
+  documents             Document[]         @relation("UserDocuments")
+  certificates_received Certificate[]      @relation("RecipientCertificates")
+  certificates_issued   Certificate[]      @relation("IssuedCertificates")
+
+  @@map("Users")
+}
+
+model Club {
+  club_id      String   @id @default(uuid())
+  club_name    String   @unique
+  description  String?
+  category     String?  @default("Technical")
+  mentor_id    String?
+  president_id String?
+  created_at   DateTime @default(now())
+
+  // Relations
+  mentor    User?   @relation("ClubMentor", fields: [mentor_id], references: [user_id], onDelete: SetNull)
+  president User?   @relation("ClubPresident", fields: [president_id], references: [user_id], onDelete: SetNull)
+  events    Event[] @relation("ClubEvents")
+
+  @@map("Clubs")
+}
+
+model Event {
+  event_id                  String             @id @default(uuid())
+  title                     String
+  description               String
+  created_by                String
+  club_id                   String?
+  status                    String             @default("published") // draft, pending_approval, changes_requested, approved, published, rejected
+  event_type                String             @default("club") // official, club
+  event_date                DateTime
+  end_date                  DateTime?
+  venue                     String
+  budget                    Float?             @default(0)
+  expected_attendees        Int?               @default(50)
+  banner_image_url          String?
+  registration_link         String?
+  proposal_document_content String?            // JSON structured editable common template content
+  is_highlighted            Boolean            @default(false)
+  created_at                DateTime           @default(now())
+  updated_at                DateTime           @default(now()) @updatedAt
+
+  // Relations
+  creator       User               @relation("EventCreator", fields: [created_by], references: [user_id], onDelete: Cascade)
+  club          Club?              @relation("ClubEvents", fields: [club_id], references: [club_id], onDelete: SetNull)
+  approvals     Event_Approval[]   @relation("EventApprovals")
+  registrations Registration[]     @relation("EventRegistrations")
+  notifications Notification[]     @relation("EventNotifications")
+  documents     Document[]         @relation("EventDocuments")
+  timeline      ProposalTimeline[] @relation("EventTimeline")
+  certificates  Certificate[]      @relation("EventCertificates")
+
+  @@map("Events")
+}
+
+model Event_Approval {
+  approval_id String    @id @default(uuid())
+  event_id    String
+  mentor_id   String
+  status      String    @default("pending") // pending, changes_requested, approved, rejected
+  remarks     String?
+  reviewed_at DateTime?
+  created_at  DateTime  @default(now())
+
+  // Relations
+  event  Event @relation("EventApprovals", fields: [event_id], references: [event_id], onDelete: Cascade)
+  mentor User  @relation("MentorApprovals", fields: [mentor_id], references: [user_id], onDelete: Cascade)
+
+  @@map("Event_Approvals")
+}
+
+model ProposalTimeline {
+  timeline_id String   @id @default(uuid())
+  event_id    String
+  stage       String   // draft_created, documents_uploaded, submitted, mentor_review_started, changes_requested, resubmitted, approved, published, rejected
+  title       String
+  description String?
+  actor_id    String?
+  actor_name  String?
+  actor_role  String?
+  remarks     String?
+  created_at  DateTime @default(now())
+
+  // Relations
+  event Event @relation("EventTimeline", fields: [event_id], references: [event_id], onDelete: Cascade)
+
+  @@map("Proposal_Timelines")
+}
+
+model Document {
+  document_id   String   @id @default(uuid())
+  event_id      String
+  file_name     String
+  original_name String
+  file_size     Int
+  mime_type     String
+  file_path     String
+  document_type String   @default("proposal") // proposal, budget, venue_permit, schedule, other
+  version       String   @default("v1.0")
+  status        String   @default("draft") // draft, submitted_for_review, changes_requested, approved
+  uploaded_by   String
+  uploaded_at   DateTime @default(now())
+  remarks       String?
+
+  // Relations
+  event    Event @relation("EventDocuments", fields: [event_id], references: [event_id], onDelete: Cascade)
+  uploader User  @relation("UserDocuments", fields: [uploaded_by], references: [user_id], onDelete: Cascade)
+
+  @@map("Documents")
+}
+
+model Certificate {
+  certificate_id     String   @id @default(uuid())
+  event_id           String
+  recipient_id       String
+  recipient_name     String
+  recipient_role     String   @default("Club President")
+  event_title        String
+  club_name          String
+  issued_by_id       String
+  issued_by_name     String   @default("Dr. Sarah Jenkins, Dean of Student Affairs")
+  citation           String   @default("In recognition of outstanding campus leadership, exemplary event coordination, and dedicated service.")
+  certificate_number String   @unique
+  issue_date         DateTime @default(now())
+  created_at         DateTime @default(now())
+
+  // Relations
+  event     Event @relation("EventCertificates", fields: [event_id], references: [event_id], onDelete: Cascade)
+  recipient User  @relation("RecipientCertificates", fields: [recipient_id], references: [user_id], onDelete: Cascade)
+  issuer    User  @relation("IssuedCertificates", fields: [issued_by_id], references: [user_id], onDelete: Cascade)
+
+  @@map("Certificates")
+}
+
+model Registration {
+  registration_id String   @id @default(uuid())
+  event_id        String
+  student_id      String
+  registered_at   DateTime @default(now())
+  status          String   @default("confirmed") // confirmed, cancelled
+
+  // Relations
+  event   Event @relation("EventRegistrations", fields: [event_id], references: [event_id], onDelete: Cascade)
+  student User  @relation("StudentRegistrations", fields: [student_id], references: [user_id], onDelete: Cascade)
+
+  @@unique([event_id, student_id])
+  @@map("Registrations")
+}
+
+model OTP_Verification {
+  otp_id     String   @id @default(uuid())
+  user_id    String
+  otp_code   String
+  purpose    String   @default("email_verification") // email_verification, password_reset
+  expires_at DateTime
+  is_used    Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  // Relations
+  user User @relation("UserOTPs", fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@map("OTP_Verifications")
+}
+
+model Notification {
+  notification_id String   @id @default(uuid())
+  user_id         String
+  event_id        String?
+  title           String   @default("Notification")
+  message         String
+  sent_at         DateTime @default(now())
+  channel         String   @default("in_app") // email, in_app
+  is_read         Boolean  @default(false)
+
+  // Relations
+  user  User   @relation("UserNotifications", fields: [user_id], references: [user_id], onDelete: Cascade)
+  event Event? @relation("EventNotifications", fields: [event_id], references: [event_id], onDelete: SetNull)
+
+  @@map("Notifications")
+}

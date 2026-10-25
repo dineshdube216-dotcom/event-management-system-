@@ -1,0 +1,11 @@
+{
+  "name": "cems-monorepo",
+  "version": "1.0.0",
+  "description": "College Event Management System (CEMS) MVP Monorepo",
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "seed": "cd backend && npm run seed",
+    "build": "cd backend && npm run prisma:generate && cd ../frontend && npm run build"
+  }
+}
